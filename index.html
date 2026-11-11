@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Vòng quay may mắn</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Paytone+One&family=Be+Vietnam+Pro:wght@500;600;700;800&display=swap" rel="stylesheet" />
+<style>
+  /* Bố cục: gian hàng hội chợ. Mái che sọc trên cùng, biển tên, trò chơi ở giữa, một nút đỏ to dưới cùng. */
+  :root{
+    --troi:#DFF2FF;        /* nền trời */
+    --troi-nhat:#F4FBFF;
+    --muc:#1C2460;         /* chữ và viền đậm */
+    --muc-nhat:#5B6494;    /* chữ phụ */
+    --do:#F0443A;          /* mái che, nút quay, kim */
+    --vang:#FFC629;        /* bóng đèn */
+    --giay:#FFFFFF;        /* thẻ, bảng */
+    --vien:#C9DCEC;        /* viền nhạt */
+    --vang-nhat:#FFDB6E;   /* tia sáng sau bảng kết quả */
+    --bong:rgb(28 36 96 / .14);
+    --f-bien:'Paytone One','Arial Black',system-ui,sans-serif;
+    --f-chu:'Be Vietnam Pro',system-ui,-apple-system,'Segoe UI',sans-serif;
+    color-scheme:light;
+  }
+  *,*::before,*::after{box-sizing:border-box}
+  [hidden]{display:none!important}
+  html,body{height:100%}
+  body{margin:0;display:flex;flex-direction:column;font-family:var(--f-chu);color:var(--muc);
+    background:linear-gradient(var(--troi),var(--troi-nhat)) fixed var(--troi-nhat);-webkit-tap-highlight-color:transparent}
+  button,input,select{font:inherit;color:inherit}
+  button{cursor:pointer}
+  :focus-visible{outline:3px solid var(--muc);outline-offset:2px}
+
+  /* ---- Màn hình chơi ---- */
+  .mai{flex:none;position:relative;height:30px;margin-bottom:13px;filter:drop-shadow(0 3px 0 var(--bong));
+    background:repeating-linear-gradient(90deg,var(--do) 0 26px,var(--giay) 26px 52px)}
+  .mai::after{content:"";position:absolute;inset:100% 0 auto;height:13px;
+    background:radial-gradient(circle at 13px 0,var(--do) 12.5px,transparent 13px) 0 0/52px 13px repeat-x,
+               radial-gradient(circle at 13px 0,var(--giay) 12.5px,transparent 13px) 26px 0/52px 13px repeat-x}
+  /* Nút mở cài đặt: trong suốt, nằm ở góc trên bên phải, người xem không thấy */
+  .nut-an{position:absolute;z-index:5;top:env(safe-area-inset-top,0px);right:env(safe-area-inset-right,0px);width:64px;height:64px;padding:0;border:0;background:none}
+  .san{flex:1 0 auto;width:100%;display:flex;flex-direction:column;align-items:center;gap:16px;
+    padding-block:14px 22px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+  h1{margin:0;font:400 clamp(26px,8.2vw,38px)/1.2 var(--f-bien);text-align:center;text-wrap:balance;overflow-wrap:anywhere}
+  /* Vòng quay được rộng sát hai mép màn hình: lề âm bù lại lề của .san */
+  .san-choi{flex:1 0 auto;align-self:stretch;display:flex;align-items:center;justify-content:center;padding-inline:4px;
+    margin-left:calc(-1 * max(16px,env(safe-area-inset-left,0px)));margin-right:calc(-1 * max(16px,env(safe-area-inset-right,0px)))}
+  .nut-quay{flex:none;width:min(100%,320px);height:64px;margin-bottom:6px;border:3px solid var(--muc);border-radius:999px;
+    background:var(--do);color:var(--giay);font:400 28px/1 var(--f-bien);letter-spacing:.06em;box-shadow:0 6px 0 var(--muc);
+    touch-action:manipulation;transition:transform .08s,box-shadow .08s}
+  .nut-quay:active{transform:translateY(4px);box-shadow:0 2px 0 var(--muc)}
+  .nut-quay:disabled{opacity:.6;pointer-events:none}
+
+  /* Vòng quay: đĩa quay nằm dưới, vành đèn + kim + trục đứng yên nằm trên.
+     To hết mức mà vẫn thấy trọn vòng: hết bề ngang, hoặc hết chiều cao còn lại sau mái che, tiêu đề và nút QUAY (khoảng 240px).
+     Cắt tròn để đĩa vuông quay nghiêng không thò góc ra ngoài màn hình. */
+  .tron{position:relative;width:100%;aspect-ratio:1;max-width:100%;border-radius:50%;overflow:hidden;
+    width:min(100%,max(240px,100dvh - 240px - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px)))}
+  .tron svg{position:absolute;inset:0;width:100%;height:100%;display:block}
+  .dia path{stroke:var(--giay);stroke-width:2}
+  .dia text{font-family:var(--f-chu);font-weight:700;text-anchor:end;dominant-baseline:central}
+  .o-anh{fill:var(--giay)}   /* ô trắng bo góc phía sau ảnh quà */
+  .vanh{pointer-events:none}
+  .v-vanh{fill:none;stroke:var(--muc);stroke-width:16}
+  .v-den{fill:none;stroke:var(--vang);stroke-width:9;stroke-linecap:round;stroke-dasharray:0 120.64}   /* 10 đèn chẵn */
+  .v-den.le{stroke-dashoffset:60.32}                                                                    /* 10 đèn lẻ, xen giữa */
+  /* Đang quay: đèn chẵn và đèn lẻ chớp so le, 2 nhịp mỗi giây */
+  .dang-quay .v-den{animation:chop .5s steps(1) infinite}
+  .dang-quay .v-den.le{animation-delay:-.25s}
+  @keyframes chop{50%{opacity:.2}}
+  .v-truc{fill:var(--giay);stroke:var(--muc);stroke-width:6}
+  .v-tam{fill:var(--do)}
+  .v-kim{fill:var(--do);stroke:var(--muc);stroke-width:4;stroke-linejoin:round}
+
+  /* ---- Bảng kết quả ---- */
+  .mo{position:fixed;inset:0;z-index:20;display:grid;place-items:center;overflow:hidden;background:var(--vang);
+    padding:calc(16px + env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) calc(16px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
+  .mo::before{content:"";position:absolute;left:50%;top:50%;width:170vmax;height:170vmax;margin:-85vmax 0 0 -85vmax;
+    background:repeating-conic-gradient(var(--vang-nhat) 0 9deg,transparent 9deg 18deg);animation:xoay 60s linear infinite}
+  .bang{position:relative;width:min(100%,330px);display:flex;flex-direction:column;align-items:center;gap:14px;padding:22px 20px 20px;
+    border:3px solid var(--muc);border-radius:26px;background:var(--giay);box-shadow:0 8px 0 var(--muc);text-align:center;animation:bat .28s cubic-bezier(.3,1.5,.5,1)}
+  .mung{margin:0;font:400 30px/1.2 var(--f-bien);color:var(--do)}
+  #kq-anh{width:190px;height:190px;object-fit:contain}
+  .kq-ten{margin:0;align-self:stretch;padding:12px 14px;border-radius:14px;background:var(--m);color:var(--c);
+    font-size:22px;font-weight:800;line-height:1.25;overflow-wrap:anywhere}
+  @keyframes xoay{to{transform:rotate(360deg)}}
+  @keyframes bat{from{transform:scale(.8);opacity:0}}
+  @media (prefers-reduced-motion:reduce){.mo::before,.bang,.dang-quay .v-den{animation:none}}
+
+  /* ---- Cài đặt (ẩn, mở bằng nút trong suốt .nut-an ở góc trên bên phải) ---- */
+  .cai-dat{position:fixed;inset:0;z-index:30;display:flex;flex-direction:column;background:var(--troi-nhat);padding-top:env(safe-area-inset-top,0px)}
+  .cd-dau,.cd-than{padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+  .cd-dau{flex:none;display:flex;align-items:center;justify-content:space-between;gap:12px;padding-block:12px;border-bottom:2px solid var(--vien)}
+  .cd-dau h2{margin:0;font:400 24px/1.2 var(--f-bien)}
+  .cd-than{flex:1;overflow-y:auto;overscroll-behavior:contain;display:flex;flex-direction:column;gap:28px;
+    padding-block:18px calc(28px + env(safe-area-inset-bottom,0px))}
+  .cd-than section{width:100%;max-width:460px;margin-inline:auto;display:flex;flex-direction:column;gap:10px}
+  .cd-than h3{margin:0;font-size:13px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--muc-nhat)}
+  .goi-y{margin:0;font-size:14px;line-height:1.5;color:var(--muc-nhat)}
+  .loi{color:var(--do);font-weight:700}
+  .o{display:flex;flex-direction:column;gap:6px;font-size:15px;font-weight:600}
+  .cai-dat input[type=text],.cai-dat input[type=number],.cai-dat select{height:46px;min-width:0;padding:0 12px;border:2px solid var(--vien);
+    border-radius:12px;background:var(--giay);font-size:16px;font-weight:500}
+  .cai-dat input[type=color]{flex:none;width:46px;height:46px;padding:3px;border:2px solid var(--vien);border-radius:12px;background:var(--giay)}
+  .cai-dat ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+  .qua{display:flex;flex-direction:column;gap:8px;padding:10px;border:2px solid var(--vien);border-radius:14px;background:var(--giay)}
+  .hang,.dat{display:flex;align-items:center;gap:8px}
+  .hang input[type=text],.dat select{flex:1}
+  .hang img{flex:none;width:46px;height:46px;object-fit:contain;border:2px solid var(--vien);border-radius:10px}
+  .dat{font-size:15px;font-weight:600}
+  .dat input{flex:none;width:68px;text-align:center}
+  .duoi{flex-wrap:wrap}
+  .tl{display:flex;align-items:center;gap:6px;font-size:15px;font-weight:600}
+  .tl input{width:78px;text-align:center}
+  .xoa{flex:none;width:44px;height:44px;border:0;border-radius:12px;background:none;color:var(--do);font-size:20px;font-weight:700}
+  .xoa:disabled{opacity:.3}
+  .phu{display:inline-flex;align-items:center;justify-content:center;min-height:40px;padding:0 14px;border:2px solid var(--muc);
+    border-radius:999px;background:var(--giay);font-size:14px;font-weight:700;cursor:pointer}
+  .them{align-self:flex-start}
+  .chinh,.bang button{height:46px;padding:0 24px;border:0;border-radius:999px;background:var(--muc);color:var(--giay);font-size:16px;font-weight:700}
+  .bang button{align-self:stretch;height:50px}
+</style>
+</head>
+<body>
+<div class="mai" aria-hidden="true"></div>
+<button type="button" class="nut-an" id="nut-an" aria-label="Cài đặt"></button>
+
+<main class="san">
+  <h1 id="tieu-de"></h1>
+  <div class="san-choi">
+    <div class="tron" id="tron">
+      <svg class="dia" id="dia" viewBox="0 0 400 400" role="img" aria-label="Vòng quay"></svg>
+      <svg class="vanh" viewBox="0 0 400 400" aria-hidden="true">
+        <circle class="v-vanh" cx="200" cy="200" r="192"/>
+        <circle class="v-den" cx="200" cy="200" r="192"/>
+        <circle class="v-den le" cx="200" cy="200" r="192"/>
+        <circle class="v-truc" cx="200" cy="200" r="30"/>
+        <circle class="v-tam" cx="200" cy="200" r="9"/>
+        <path class="v-kim" d="M185 3h30l-15 34z"/>
+      </svg>
+    </div>
+  </div>
+  <button type="button" class="nut-quay" id="nut-quay">QUAY</button>
+</main>
+
+<div class="mo" id="ket-qua" hidden>
+  <div class="bang" role="dialog" aria-modal="true" aria-labelledby="kq-mung">
+    <p class="mung" id="kq-mung">Chúc mừng!</p>
+    <img id="kq-anh" alt="" hidden>
+    <p class="kq-ten" id="kq-ten"></p>
+    <button type="button" id="kq-dong">Đóng</button>
+  </div>
+</div>
+
+<section class="cai-dat" id="cai-dat" role="dialog" aria-modal="true" aria-labelledby="cd-ten" hidden>
+  <header class="cd-dau">
+    <h2 id="cd-ten">Cài đặt</h2>
+    <button type="button" class="chinh" data-v="xong">Xong</button>
+  </header>
+  <div class="cd-than">
+    <section>
+      <h3>Chung</h3>
+      <label class="o">Tiêu đề<input type="text" id="cd-tieu-de" maxlength="40"></label>
+      <label class="o">Mỗi lần quay chạy bao nhiêu giây<input type="number" id="cd-giay" inputmode="decimal" min="2" max="30"></label>
+      <label class="o">Các ô quà trên vòng<select id="cd-o"><option value="">Đều nhau</option><option value="1">To nhỏ theo % tỉ lệ</option></select></label>
+    </section>
+    <section>
+      <h3>Danh sách quà</h3>
+      <p class="goi-y">Số % là tỉ lệ trúng của quà khi quay ngẫu nhiên. Thêm hoặc xóa quà thì trang chia đều lại % cho tất cả. Ảnh hiện trên ô quà của vòng quay và ở bảng kết quả.</p>
+      <ul id="ds-qua"></ul>
+      <p class="goi-y" id="tong-tl"></p>
+      <button type="button" class="phu them" data-v="them-qua">+ Thêm quà</button>
+      <p class="goi-y loi" id="loi" hidden>Không lưu được vào máy. Nếu vừa thêm ảnh, hãy bỏ bớt ảnh.</p>
+    </section>
+    <section>
+      <h3>Chỉnh trúng</h3>
+      <p class="goi-y">Đặt trước lần quay nào ra quà nào. Số lần tính từ lúc bấm Xong. Những lần không đặt thì ra ngẫu nhiên theo % của từng quà. Quà 0% vẫn ra được nếu đặt ở đây.</p>
+      <ul id="ds-dat"></ul>
+      <button type="button" class="phu them" data-v="them-dat">+ Thêm lần đặt trước</button>
+      <p class="goi-y" id="da-quay"></p>
+    </section>
+  </div>
+</section>
+
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const KHOA = 'vong-quay-may-man';
+const TEN_TRANG = 'Vòng quay may mắn';
+const MAU = ['#F0443A', '#FFB81C', '#12A683', '#1E88E5', '#8E5CF7', '#FF6FB5', '#7AC943', '#FF8A3D'];
+const DUONG = 'cubic-bezier(.12,.75,.12,1)';     // chạy nhanh rồi chậm dần
+
+// Mọi cài đặt lưu ngay trên máy này. Quà mẫu bên dưới chỉ dùng cho lần mở đầu tiên.
+let daLuu = null;
+try { daLuu = JSON.parse(localStorage.getItem(KHOA)); } catch (e) {}
+const S = Object.assign({
+  tieuDe: TEN_TRANG, giay: 6, dat: [],
+  theoTl: false,   // true: ô quà trên vòng to nhỏ theo %; false: các ô đều nhau
+  qua: ['Lì xì 50k', 'Trà sữa', 'Móc khóa', 'Áo thun', 'Gấu bông', 'Chúc may mắn'].map((ten, i) => ({ id: i + 1, ten, mau: MAU[i], anh: '' }))
+}, daLuu);
+
+// tl = tỉ lệ trúng (%) của từng quà. Chia đều cho mọi quà
+function chiaDeu() { S.qua.forEach(q => q.tl = 100 / S.qua.length); }
+if (S.qua.some(q => typeof q.tl !== 'number')) chiaDeu();   // lần mở đầu tiên, hoặc dữ liệu lưu từ bản chưa có %
+
+let lan = 0;          // số lần đã quay, tính từ lúc mở trang hoặc từ lần bấm Xong gần nhất
+let dangQuay = false;
+let goc = 0;          // góc hiện tại của đĩa
+
+function luu() {
+  try { localStorage.setItem(KHOA, JSON.stringify(S)); $('loi').hidden = true; }
+  catch (e) { $('loi').hidden = false; }
+}
+
+// Chữ trắng hay chữ đậm cho dễ đọc trên màu quà
+function mauChu(m) {
+  const sang = parseInt(m.slice(1, 3), 16) * 299 + parseInt(m.slice(3, 5), 16) * 587 + parseInt(m.slice(5, 7), 16) * 114;
+  return sang > 150000 ? 'var(--muc)' : 'var(--giay)';
+}
+
+/* ---------- Vẽ màn hình chơi ---------- */
+// Chia tên thành 1 hoặc 2 dòng, chọn cách cho chữ to hơn. dai, rong = chỗ trống dọc theo bán kính và ngang ô
+function xepChu(ten, dai, rong) {
+  const co = ds => Math.min(22, dai / (Math.max(...ds.map(d => d.length)) * .6), rong / ds.length / 1.15);
+  let ds = [ten];
+  const cach = [...ten.matchAll(/ /g)].map(m => m.index).sort((a, b) => Math.abs(a - ten.length / 2) - Math.abs(b - ten.length / 2))[0];
+  if (cach !== undefined) {
+    const hai = [ten.slice(0, cach), ten.slice(cach + 1)];
+    if (co(hai) > co(ds)) ds = hai;
+  }
+  return { ds, co: Math.max(7, co(ds)).toFixed(1) };
+}
+
+// Chọn quà theo % (tổng khác 100 thì tự quy về 100). r là số ngẫu nhiên từ 0 tới dưới 1
+function chonTheoTiLe(r) {
+  const tong = S.qua.reduce((t, q) => t + q.tl, 0);
+  if (!tong) return Math.floor(r * S.qua.length);   // mọi quà đều 0% thì coi như đều nhau
+  r *= tong;
+  const i = S.qua.findIndex(q => (r -= q.tl) < 0);
+  return i < 0 ? S.qua.findLastIndex(q => q.tl > 0) : i;   // sai số làm tròn: lấy quà cuối còn tỉ lệ, không bao giờ rơi vào quà 0%
+}
+
+// Góc bắt đầu và độ rộng (tính bằng độ) của từng ô trên đĩa. Khi vẽ theo %, ô nào cũng rộng ít nhất 3% vòng
+// để quà 0% vẫn có chỗ cho đĩa dừng vào khi được đặt trước
+function chiaO() {
+  const tong = S.qua.reduce((t, q) => t + q.tl, 0);
+  const nang = S.qua.map(q => S.theoTl && tong ? Math.max(q.tl, tong * .03) : 1);
+  const tongNang = nang.reduce((t, x) => t + x, 0);
+  let dau = 0;
+  return nang.map(x => { const o = { dau, rong: 360 * x / tongNang }; dau += o.rong; return o; });
+}
+
+function ve() {
+  const R = 184;
+  const diem = g => `${(200 + R * Math.sin(g * Math.PI / 180)).toFixed(1)} ${(200 - R * Math.cos(g * Math.PI / 180)).toFixed(1)}`;
+  $('tieu-de').textContent = S.tieuDe.trim() || TEN_TRANG;
+  goc = 0;
+  $('dia').style.transition = 'none';
+  $('dia').style.transform = 'rotate(0deg)';
+  $('dia').innerHTML = chiaO().map(({ dau, rong }, i) => {
+    const q = S.qua[i], giua = dau + rong / 2, t = Math.tan(Math.min(rong, 120) / 2 * Math.PI / 180);
+    const o = Math.round(Math.min(58, .9 * 352 * t / (1 + 2 * t)));   // cạnh ô ảnh: vừa lọt trong ô quà ở sát vành
+    const cuoi = q.anh ? 170 - o : 172;   // chữ chạy từ gần trục (bán kính 40) ra tới bán kính này
+    const { ds, co } = xepChu(q.ten.trim(), cuoi - 40, Math.PI * (40 + cuoi) * rong / 360 * .8);
+    const x = 200 + cuoi;
+    const chu = ds.length === 1 ? esc(ds[0]) : `<tspan dy="-.6em">${esc(ds[0])}</tspan><tspan x="${x}" dy="1.2em">${esc(ds[1])}</tspan>`;
+    // Ảnh nằm sát vành, đầu ảnh hướng ra ngoài: ô nào dừng dưới kim thì ảnh ô đó đứng thẳng
+    const anh = q.anh ? `<g transform="rotate(${giua} 200 200)"><rect class="o-anh" x="${200 - o / 2}" y="24" width="${o}" height="${o}" rx="${o * .15}"/>` +
+      `<image href="${q.anh}" x="${203 - o / 2}" y="27" width="${o - 6}" height="${o - 6}"/></g>` : '';
+    return `<path d="M200 200L${diem(dau)}A${R} ${R} 0 ${rong > 180 ? 1 : 0} 1 ${diem(dau + rong)}Z" fill="${q.mau}"/>${anh}` +
+      `<text x="${x}" y="200" font-size="${co}" style="fill:${mauChu(q.mau)}" transform="rotate(${giua - 90} 200 200)">${chu}</text>`;
+  }).join('');
+}
+
+/* ---------- Âm thanh: tự tạo bằng Web Audio, không cần file ---------- */
+let am;   // tạo ở lần bấm QUAY đầu tiên, vì trình duyệt chỉ cho phát tiếng sau khi người dùng chạm
+function keu(tanSo, tre, dai, kieu, to) {
+  const luc = am.currentTime + tre, song = am.createOscillator(), nut = am.createGain();
+  song.type = kieu;
+  song.frequency.value = tanSo;
+  nut.gain.setValueAtTime(to, luc);
+  nut.gain.exponentialRampToValueAtTime(.001, luc + dai);
+  song.connect(nut).connect(am.destination);
+  song.start(luc);
+  song.stop(luc + dai);
+}
+const tach = () => keu(1200, 0, .035, 'square', .1);
+const reo = () => [523, 659, 784, 1047].forEach((f, k) => keu(f, k * .12, k < 3 ? .25 : .7, 'triangle', .3));
+
+// Kêu tạch mỗi khi kim sang ô khác: đọc góc thật của đĩa ở từng khung hình cho tới lúc dừng
+function tachTheoVong(hetLuc) {
+  const moc = chiaO().map(o => o.dau);
+  let oTruoc = -1, lucKeu = 0;
+  (function khung(gio) {
+    const m = new DOMMatrix(getComputedStyle($('dia')).transform);
+    const duoiKim = (360 - Math.atan2(m.b, m.a) * 180 / Math.PI) % 360;   // góc trên đĩa đang nằm dưới kim
+    let o = moc.length - 1;
+    while (moc[o] > duoiKim) o--;
+    if (o !== oTruoc && oTruoc >= 0 && gio - lucKeu > 35) { tach(); lucKeu = gio; }
+    oTruoc = o;
+    if (gio < hetLuc) requestAnimationFrame(khung);
+  })(performance.now());
+}
+
+/* ---------- Quay ---------- */
+$('nut-quay').onclick = () => {
+  if (dangQuay) return;
+  dangQuay = true;
+  $('nut-quay').disabled = true;
+  $('tron').classList.add('dang-quay');   // đèn quanh vành chớp so le cho tới lúc hiện kết quả
+  lan++;
+  am = am || new (window.AudioContext || window.webkitAudioContext)();
+  am.resume();
+
+  // Lần này có đặt trước thì ra đúng quà đó, không thì ngẫu nhiên theo % của từng quà
+  const dat = S.dat.find(d => d.lan === lan);
+  let i = dat ? S.qua.findIndex(q => q.id === dat.id) : -1;
+  if (i < 0) i = chonTheoTiLe(Math.random());
+
+  // Quay ít nhất 4 vòng rồi dừng sao cho ô thứ i nằm dưới kim, lệch ngẫu nhiên trong ô cho tự nhiên
+  const o = chiaO()[i], dich = -(o.dau + o.rong / 2 + (Math.random() - .5) * o.rong * .8);
+  tachTheoVong(performance.now() + S.giay * 1000);
+  goc += 360 * Math.max(4, Math.round(S.giay)) + ((dich - goc) % 360 + 360) % 360;
+  $('dia').style.transition = `transform ${S.giay}s ${DUONG}`;
+  $('dia').style.transform = `rotate(${goc}deg)`;
+  setTimeout(() => hienKetQua(S.qua[i]), S.giay * 1000 + 150);
+};
+
+function hienKetQua(q) {
+  $('tron').classList.remove('dang-quay');
+  reo();
+  $('kq-anh').hidden = !q.anh;
+  if (q.anh) $('kq-anh').src = q.anh;
+  $('kq-ten').textContent = q.ten;
+  $('kq-ten').style.cssText = `--m:${q.mau};--c:${mauChu(q.mau)}`;
+  $('ket-qua').hidden = false;
+  $('kq-dong').focus();
+}
+
+$('kq-dong').onclick = () => {
+  $('ket-qua').hidden = true;
+  dangQuay = false;
+  $('nut-quay').disabled = false;
+};
+
+/* ---------- Cài đặt: chạm 1 lần vào nút trong suốt ở góc trên bên phải ---------- */
+$('nut-an').onclick = () => {
+  if (dangQuay) return;
+  veCaiDat();
+  $('cai-dat').hidden = false;
+};
+
+function veCaiDat() {
+  $('cd-tieu-de').value = S.tieuDe;
+  $('cd-giay').value = S.giay;
+  $('cd-o').value = S.theoTl ? '1' : '';
+  $('ds-qua').innerHTML = S.qua.map(q => `<li class="qua" data-id="${q.id}">
+    <div class="hang">
+      <input type="color" id="mau-${q.id}" data-o="mau" value="${q.mau}" aria-label="Màu của quà">
+      <input type="text" id="ten-${q.id}" data-o="ten" value="${esc(q.ten)}" maxlength="40" aria-label="Tên quà">
+      <button type="button" class="xoa" data-v="xoa-qua" aria-label="Xóa quà này"${S.qua.length < 3 ? ' disabled' : ''}>✕</button>
+    </div>
+    <div class="hang duoi">
+      <label class="tl"><input type="number" id="tl-${q.id}" data-o="tl" inputmode="decimal" min="0" step="any" value="${+q.tl.toFixed(2)}" aria-label="Tỉ lệ trúng"> %</label>
+      ${q.anh ? `<img src="${q.anh}" alt="">` : ''}
+      <label class="phu">${q.anh ? 'Đổi ảnh' : 'Chọn ảnh'}<input type="file" id="anh-${q.id}" data-o="anh" accept="image/*" hidden></label>
+      ${q.anh ? '<button type="button" class="phu" data-v="bo-anh">Bỏ ảnh</button>' : ''}
+    </div>
+  </li>`).join('');
+  $('ds-dat').innerHTML = S.dat.map((d, k) => `<li class="dat" data-k="${k}">
+    Lần <input type="number" id="dat-lan-${k}" data-o="lan" inputmode="numeric" min="1" value="${d.lan || ''}" aria-label="Lần quay thứ mấy">
+    trúng <select id="dat-qua-${k}" data-o="qua" aria-label="Quà trúng">${S.qua.map(q => `<option value="${q.id}"${q.id === d.id ? ' selected' : ''}>${esc(q.ten)}</option>`).join('')}</select>
+    <button type="button" class="xoa" data-v="xoa-dat" aria-label="Xóa lần đặt trước này">✕</button>
+  </li>`).join('');
+  $('da-quay').textContent = `Đã quay ${lan} lần. Bấm Xong là đếm lại từ 1.`;
+  veTong();
+}
+
+function veTong() {
+  const tong = +S.qua.reduce((t, q) => t + q.tl, 0).toFixed(2);
+  $('tong-tl').textContent = `Tổng tỉ lệ: ${tong.toLocaleString('vi-VN')}%.` +
+    (tong === 100 ? '' : tong ? ' Trang tự quy về 100%, mỗi quà tính theo phần của nó trên tổng.' : ' Mọi quà đang 0% nên trang coi như đều nhau.');
+}
+
+const quaCua = li => S.qua.find(q => q.id == li.dataset.id);
+
+// Gõ tới đâu lưu tới đó
+$('cai-dat').addEventListener('input', e => {
+  const o = e.target, li = o.closest('li');
+  if (o.id === 'cd-tieu-de') S.tieuDe = o.value;
+  else if (o.id === 'cd-giay') S.giay = Math.min(30, Math.max(2, parseFloat(o.value) || 6));
+  else if (o.id === 'cd-o') S.theoTl = !!o.value;
+  else if (o.dataset.o === 'mau') quaCua(li).mau = o.value;
+  else if (o.dataset.o === 'tl') { quaCua(li).tl = Math.max(0, parseFloat(o.value) || 0); veTong(); }
+  else if (o.dataset.o === 'ten') {
+    quaCua(li).ten = o.value;
+    document.querySelectorAll(`#ds-dat option[value="${li.dataset.id}"]`).forEach(c => c.textContent = o.value);
+  }
+  else if (o.dataset.o === 'lan') S.dat[li.dataset.k].lan = parseInt(o.value) || 0;
+  else if (o.dataset.o === 'qua') S.dat[li.dataset.k].id = +o.value;
+  else return;
+  luu();
+});
+
+$('cai-dat').addEventListener('change', e => {
+  const o = e.target;
+  if (o.id === 'cd-giay') o.value = S.giay;
+  if (o.dataset.o !== 'anh' || !o.files[0]) return;
+  // Thu nhỏ ảnh (cạnh dài 360px, nền trắng) để lưu được nhiều ảnh trên máy
+  const q = quaCua(o.closest('li')), anh = new Image();
+  anh.onload = () => {
+    const tl = Math.min(1, 360 / Math.max(anh.width, anh.height));
+    const khung = document.createElement('canvas');
+    khung.width = Math.round(anh.width * tl);
+    khung.height = Math.round(anh.height * tl);
+    const but = khung.getContext('2d');
+    but.fillStyle = '#fff';
+    but.fillRect(0, 0, khung.width, khung.height);
+    but.drawImage(anh, 0, 0, khung.width, khung.height);
+    q.anh = khung.toDataURL('image/jpeg', .85);
+    URL.revokeObjectURL(anh.src);
+    luu();
+    veCaiDat();
+  };
+  anh.src = URL.createObjectURL(o.files[0]);
+});
+
+$('cai-dat').addEventListener('click', e => {
+  const v = e.target.dataset.v, li = e.target.closest('li');
+  if (!v) return;
+  if (v === 'xong') { lan = 0; $('cai-dat').hidden = true; ve(); return; }   // bấm Xong là đếm lại từ 1
+  if (v === 'them-qua') S.qua.push({ id: Math.max(...S.qua.map(q => q.id)) + 1, ten: 'Quà mới', mau: MAU[S.qua.length % MAU.length], anh: '' });
+  if (v === 'xoa-qua') {
+    S.qua = S.qua.filter(q => q.id != li.dataset.id);
+    S.dat = S.dat.filter(d => d.id != li.dataset.id);
+  }
+  if (v === 'them-qua' || v === 'xoa-qua') chiaDeu();   // thêm hoặc xóa quà là chia đều lại % cho tất cả
+  if (v === 'bo-anh') quaCua(li).anh = '';
+  if (v === 'them-dat') S.dat.push({ lan: Math.max(0, ...S.dat.map(d => d.lan)) + 1, id: S.qua[0].id });
+  if (v === 'xoa-dat') S.dat.splice(li.dataset.k, 1);
+  luu();
+  veCaiDat();
+});
+
+ve();
+</script>
+</body>
+</html>
