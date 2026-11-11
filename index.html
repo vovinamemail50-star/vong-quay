@@ -115,6 +115,7 @@
   .duoi{flex-wrap:wrap}
   .tl{display:flex;align-items:center;gap:6px;font-size:15px;font-weight:600}
   .tl input{width:78px;text-align:center}
+  .cai-dat input[type=range]{width:100%;height:32px;margin:0;accent-color:var(--do)}
   .xoa{flex:none;width:44px;height:44px;border:0;border-radius:12px;background:none;color:var(--do);font-size:20px;font-weight:700}
   .xoa:disabled{opacity:.3}
   .phu{display:inline-flex;align-items:center;justify-content:center;min-height:40px;padding:0 14px;border:2px solid var(--muc);
@@ -122,6 +123,24 @@
   .them{align-self:flex-start}
   .chinh,.bang button{height:46px;padding:0 24px;border:0;border-radius:999px;background:var(--muc);color:var(--giay);font-size:16px;font-weight:700}
   .bang button{align-self:stretch;height:50px}
+
+  /* ---- Điện thoại để ngang: vòng quay bên trái cao hết màn hình, kim nằm bên phải vòng, tiêu đề và nút QUAY ở cột bên phải ---- */
+  @media (orientation:landscape) and (max-height:600px){
+    .mai{display:none}
+    .san{display:grid;grid-template-columns:auto minmax(0,1fr);grid-template-rows:1fr 1fr;column-gap:20px;row-gap:14px;padding-block:10px}
+    .san-choi{grid-area:1 / 1 / 3 / 2;margin:0;padding:0}
+    /* xoay cả vòng 90 độ: kim từ trên đỉnh sang bên phải, mọi phép tính dừng đúng ô giữ nguyên */
+    .tron{width:min(100dvh - 20px - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px),100vw - 280px);transform:rotate(90deg)}
+    /* ảnh xoay ngược lại 90 độ để đứng thẳng khi ô dừng ở kim bên phải */
+    .dia image{transform-box:fill-box;transform-origin:center;transform:rotate(-90deg)}
+    h1{grid-area:1 / 2;align-self:end;font-size:clamp(22px,4.4vw,34px)}
+    .nut-quay{grid-area:2 / 2;align-self:start;justify-self:center}
+    /* bảng kết quả: ảnh bên trái, chữ và nút bên phải, cho vừa chiều cao thấp */
+    .bang{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:10px 0;width:min(100%,540px);padding:16px 18px}
+    #kq-anh{grid-row:1 / span 3;margin-right:18px;width:min(190px,56vh);height:min(190px,56vh)}
+    .mung,.kq-ten,.bang button{grid-column:2}
+    .mung{font-size:26px}
+  }
 </style>
 </head>
 <body>
@@ -166,10 +185,12 @@
       <label class="o">Tiêu đề<input type="text" id="cd-tieu-de" maxlength="40"></label>
       <label class="o">Mỗi lần quay chạy bao nhiêu giây<input type="number" id="cd-giay" inputmode="decimal" min="2" max="30"></label>
       <label class="o">Các ô quà trên vòng<select id="cd-o"><option value="">Đều nhau</option><option value="1">To nhỏ theo % tỉ lệ</option></select></label>
+      <label class="o"><span>Cỡ chữ trên vòng: <b id="cd-co-so"></b></span><input type="range" id="cd-co" min="40" max="160" step="5"></label>
+      <p class="goi-y">100% là cỡ trang tự tính. Kéo sang trái thì mọi chữ nhỏ lại. Kéo sang phải thì chữ ngắn to thêm, nhưng chữ không bao giờ to quá ô của nó.</p>
     </section>
     <section>
       <h3>Danh sách quà</h3>
-      <p class="goi-y">Số % là tỉ lệ trúng của quà khi quay ngẫu nhiên. Thêm hoặc xóa quà thì trang chia đều lại % cho tất cả. Ảnh hiện trên ô quà của vòng quay và ở bảng kết quả.</p>
+      <p class="goi-y">Ô “Trúng” là tỉ lệ trúng của quà khi quay ngẫu nhiên; thêm hoặc xóa quà thì trang chia đều lại cho tất cả. Ô “Chữ” là cỡ chữ riêng của quà đó so với mức chung, để trống là theo mức chung. Ảnh hiện trên ô quà của vòng quay và ở bảng kết quả.</p>
       <ul id="ds-qua"></ul>
       <p class="goi-y" id="tong-tl"></p>
       <button type="button" class="phu them" data-v="them-qua">+ Thêm quà</button>
@@ -199,6 +220,7 @@ try { daLuu = JSON.parse(localStorage.getItem(KHOA)); } catch (e) {}
 const S = Object.assign({
   tieuDe: TEN_TRANG, giay: 6, dat: [],
   theoTl: false,   // true: ô quà trên vòng to nhỏ theo %; false: các ô đều nhau
+  coChu: 100,      // cỡ chữ chung trên vòng, tính bằng % so với cỡ trang tự tính. Mỗi quà có thể có thêm q.co riêng
   qua: ['Lì xì 50k', 'Trà sữa', 'Móc khóa', 'Áo thun', 'Gấu bông', 'Chúc may mắn'].map((ten, i) => ({ id: i + 1, ten, mau: MAU[i], anh: '' }))
 }, daLuu);
 
@@ -224,11 +246,12 @@ function mauChu(m) {
 /* ---------- Vẽ màn hình chơi ---------- */
 // Chia tên thành 1 hoặc 2 dòng, chọn cách cho chữ to hơn, rồi lấy cỡ chữ to nhất mà khối chữ còn nằm gọn trong ô.
 // tam = bán kính đặt giữa khối chữ, dai = chỗ trống dọc theo bán kính, t = tan(nửa góc của ô)
-function xepChu(ten, tam, dai, t) {
+// v = mức người dùng chỉnh (1 = tự động). Trên 1 thì nới mức trần 44 cho chữ ngắn to thêm, dưới 1 thì thu nhỏ mọi chữ
+function xepChu(ten, tam, dai, t, v) {
   const co = ds => {
     const m = Math.max(...ds.map(d => d.length)) * .6, k = ds.length * 1.15;   // bề dài và bề cao khối chữ, tính theo cỡ chữ
-    // tối đa 44; không dài quá chỗ trống; và đầu chữ phía trục (chỗ ô hẹp nhất mà chữ chạm tới) vẫn lọt trong ô
-    return Math.min(44, dai / m, 2 * tam * t / (k + m * t));
+    // không quá mức trần; không dài quá chỗ trống; và đầu chữ phía trục (chỗ ô hẹp nhất mà chữ chạm tới) vẫn lọt trong ô
+    return Math.min(44 * Math.max(v, 1), dai / m, 2 * tam * t / (k + m * t));
   };
   let ds = [ten];
   const cach = [...ten.matchAll(/ /g)].map(m => m.index).sort((a, b) => Math.abs(a - ten.length / 2) - Math.abs(b - ten.length / 2))[0];
@@ -236,7 +259,7 @@ function xepChu(ten, tam, dai, t) {
     const hai = [ten.slice(0, cach), ten.slice(cach + 1)];
     if (co(hai) > co(ds)) ds = hai;
   }
-  return { ds, co: Math.max(7, co(ds)).toFixed(1) };
+  return { ds, co: Math.max(5, Math.max(7, co(ds)) * Math.min(v, 1)).toFixed(1) };
 }
 
 // Chọn quà theo % (tổng khác 100 thì tự quy về 100). r là số ngẫu nhiên từ 0 tới dưới 1
@@ -270,7 +293,7 @@ function ve() {
     const o = Math.round(Math.min(58, .9 * 352 * t / (1 + 2 * t)));   // cạnh ô ảnh: vừa lọt trong ô quà ở sát vành
     const cuoi = q.anh ? 170 - o : 172;   // chữ được nằm trong khoảng từ gần trục (bán kính 40) ra tới bán kính này
     const tam = (40 + cuoi) / 2;          // và được đặt vào giữa khoảng đó
-    const { ds, co } = xepChu(q.ten.trim(), tam, cuoi - 40, t);
+    const { ds, co } = xepChu(q.ten.trim(), tam, cuoi - 40, t, S.coChu / 100 * (q.co || 100) / 100);
     const x = 200 + tam;
     const chu = ds.length === 1 ? esc(ds[0]) : `<tspan dy="-.6em">${esc(ds[0])}</tspan><tspan x="${x}" dy="1.2em">${esc(ds[1])}</tspan>`;
     // Ảnh nằm sát vành, đầu ảnh hướng ra ngoài: ô nào dừng dưới kim thì ảnh ô đó đứng thẳng
@@ -367,6 +390,8 @@ function veCaiDat() {
   $('cd-tieu-de').value = S.tieuDe;
   $('cd-giay').value = S.giay;
   $('cd-o').value = S.theoTl ? '1' : '';
+  $('cd-co').value = S.coChu;
+  $('cd-co-so').textContent = S.coChu + '%';
   $('ds-qua').innerHTML = S.qua.map(q => `<li class="qua" data-id="${q.id}">
     <div class="hang">
       <input type="color" id="mau-${q.id}" data-o="mau" value="${q.mau}" aria-label="Màu của quà">
@@ -374,7 +399,10 @@ function veCaiDat() {
       <button type="button" class="xoa" data-v="xoa-qua" aria-label="Xóa quà này"${S.qua.length < 3 ? ' disabled' : ''}>✕</button>
     </div>
     <div class="hang duoi">
-      <label class="tl"><input type="number" id="tl-${q.id}" data-o="tl" inputmode="decimal" min="0" step="any" value="${+q.tl.toFixed(2)}" aria-label="Tỉ lệ trúng"> %</label>
+      <label class="tl">Trúng <input type="number" id="tl-${q.id}" data-o="tl" inputmode="decimal" min="0" step="any" value="${+q.tl.toFixed(2)}" aria-label="Tỉ lệ trúng"> %</label>
+      <label class="tl">Chữ <input type="number" id="co-${q.id}" data-o="co" inputmode="numeric" min="20" max="300" placeholder="100" value="${q.co || ''}" aria-label="Cỡ chữ riêng của quà này"> %</label>
+    </div>
+    <div class="hang duoi">
       ${q.anh ? `<img src="${q.anh}" alt="">` : ''}
       <label class="phu">${q.anh ? 'Đổi ảnh' : 'Chọn ảnh'}<input type="file" id="anh-${q.id}" data-o="anh" accept="image/*" hidden></label>
       ${q.anh ? '<button type="button" class="phu" data-v="bo-anh">Bỏ ảnh</button>' : ''}
@@ -403,6 +431,8 @@ $('cai-dat').addEventListener('input', e => {
   if (o.id === 'cd-tieu-de') S.tieuDe = o.value;
   else if (o.id === 'cd-giay') S.giay = Math.min(30, Math.max(2, parseFloat(o.value) || 6));
   else if (o.id === 'cd-o') S.theoTl = !!o.value;
+  else if (o.id === 'cd-co') { S.coChu = +o.value; $('cd-co-so').textContent = o.value + '%'; }
+  else if (o.dataset.o === 'co') quaCua(li).co = Math.min(300, Math.max(20, parseFloat(o.value))) || 0;   // để trống = theo mức chung
   else if (o.dataset.o === 'mau') quaCua(li).mau = o.value;
   else if (o.dataset.o === 'tl') { quaCua(li).tl = Math.max(0, parseFloat(o.value) || 0); veTong(); }
   else if (o.dataset.o === 'ten') {
