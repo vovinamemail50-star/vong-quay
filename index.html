@@ -61,7 +61,7 @@
     width:min(100%,max(240px,100dvh - 240px - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px)))}
   .tron svg{position:absolute;inset:0;width:100%;height:100%;display:block}
   .dia path{stroke:var(--giay);stroke-width:2}
-  .dia text{font-family:var(--f-chu);font-weight:700;text-anchor:end;dominant-baseline:central}
+  .dia text{font-family:var(--f-chu);font-weight:700;text-anchor:middle;dominant-baseline:central}
   .o-anh{fill:var(--giay)}   /* ô trắng bo góc phía sau ảnh quà */
   .vanh{pointer-events:none}
   .v-vanh{fill:none;stroke:var(--muc);stroke-width:16}
@@ -222,9 +222,14 @@ function mauChu(m) {
 }
 
 /* ---------- Vẽ màn hình chơi ---------- */
-// Chia tên thành 1 hoặc 2 dòng, chọn cách cho chữ to hơn. dai, rong = chỗ trống dọc theo bán kính và ngang ô
-function xepChu(ten, dai, rong) {
-  const co = ds => Math.min(22, dai / (Math.max(...ds.map(d => d.length)) * .6), rong / ds.length / 1.15);
+// Chia tên thành 1 hoặc 2 dòng, chọn cách cho chữ to hơn, rồi lấy cỡ chữ to nhất mà khối chữ còn nằm gọn trong ô.
+// tam = bán kính đặt giữa khối chữ, dai = chỗ trống dọc theo bán kính, t = tan(nửa góc của ô)
+function xepChu(ten, tam, dai, t) {
+  const co = ds => {
+    const m = Math.max(...ds.map(d => d.length)) * .6, k = ds.length * 1.15;   // bề dài và bề cao khối chữ, tính theo cỡ chữ
+    // tối đa 44; không dài quá chỗ trống; và đầu chữ phía trục (chỗ ô hẹp nhất mà chữ chạm tới) vẫn lọt trong ô
+    return Math.min(44, dai / m, 2 * tam * t / (k + m * t));
+  };
   let ds = [ten];
   const cach = [...ten.matchAll(/ /g)].map(m => m.index).sort((a, b) => Math.abs(a - ten.length / 2) - Math.abs(b - ten.length / 2))[0];
   if (cach !== undefined) {
@@ -263,9 +268,10 @@ function ve() {
   $('dia').innerHTML = chiaO().map(({ dau, rong }, i) => {
     const q = S.qua[i], giua = dau + rong / 2, t = Math.tan(Math.min(rong, 120) / 2 * Math.PI / 180);
     const o = Math.round(Math.min(58, .9 * 352 * t / (1 + 2 * t)));   // cạnh ô ảnh: vừa lọt trong ô quà ở sát vành
-    const cuoi = q.anh ? 170 - o : 172;   // chữ chạy từ gần trục (bán kính 40) ra tới bán kính này
-    const { ds, co } = xepChu(q.ten.trim(), cuoi - 40, Math.PI * (40 + cuoi) * rong / 360 * .8);
-    const x = 200 + cuoi;
+    const cuoi = q.anh ? 170 - o : 172;   // chữ được nằm trong khoảng từ gần trục (bán kính 40) ra tới bán kính này
+    const tam = (40 + cuoi) / 2;          // và được đặt vào giữa khoảng đó
+    const { ds, co } = xepChu(q.ten.trim(), tam, cuoi - 40, t);
+    const x = 200 + tam;
     const chu = ds.length === 1 ? esc(ds[0]) : `<tspan dy="-.6em">${esc(ds[0])}</tspan><tspan x="${x}" dy="1.2em">${esc(ds[1])}</tspan>`;
     // Ảnh nằm sát vành, đầu ảnh hướng ra ngoài: ô nào dừng dưới kim thì ảnh ô đó đứng thẳng
     const anh = q.anh ? `<g transform="rotate(${giua} 200 200)"><rect class="o-anh" x="${200 - o / 2}" y="24" width="${o}" height="${o}" rx="${o * .15}"/>` +
