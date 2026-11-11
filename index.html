@@ -312,7 +312,11 @@ $('nut-quay').onclick = () => {
   $('nut-quay').disabled = true;
   $('tron').classList.add('dang-quay');   // đèn quanh vành chớp so le cho tới lúc hiện kết quả
   lan++;
-  am = am || new (window.AudioContext || window.webkitAudioContext)();
+  if (!am) {
+    // iPhone: mặc định cần gạt im lặng tắt luôn tiếng của trang web. Khai báo kiểu "playback" thì vẫn phát như xem video (iOS 17 trở lên)
+    if (navigator.audioSession) navigator.audioSession.type = 'playback';
+    am = new (window.AudioContext || window.webkitAudioContext)();
+  }
   am.resume();
 
   // Lần này có đặt trước thì ra đúng quà đó, không thì ngẫu nhiên theo % của từng quà
